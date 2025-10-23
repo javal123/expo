@@ -1,4 +1,393 @@
----
+---npm install --global eas-cli && npx create-expo-app dkwin-signal-big-small-app- && cd dkwin-signal-big-small-app- && eas init --id 181d5a6c-8f53-408f-a7b3-0bf3ce412686import requests
+import time
+import random
+import json
+from datetime import datetime
+import numpy as np
+from collections import Counter, deque
+import threading
+
+class RealTimeTradingSystem:
+    def __init__(self):
+        self.API_URL = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
+        self.history_data = deque(maxlen=100)
+        self.prediction_history = []
+        self.performance_stats = {
+            'total_predictions': 0,
+            'correct_predictions': 0,
+            'current_streak': 0,
+            'best_streak': 0,
+            'accuracy': 0.0
+        }
+        self.last_round = None
+        self.is_running = True
+        
+    def get_timestamp(self):
+        return str(int(time.time() * 1000))
+    
+    def get_market_data(self):
+        """Fetch real-time market data"""
+        try:
+            url = f"{self.API_URL}?ts={self.get_timestamp()}"
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            return data["data"]["list"]
+        except Exception as e:
+            print(f"❌ Error fetching data: {e}")
+            return None
+    
+    def analyze_market_trends(self, numbers):
+        """Advanced market trend analysis"""
+        if len(numbers) < 5:
+            return {"trend": "NEUTRAL", "strength": "LOW"}
+        
+        num_list = [int(n) for n in numbers[-20:]]  # Last 20 rounds
+        
+        # Multiple trend indicators
+        sma_5 = np.mean(num_list[-5:])
+        sma_10 = np.mean(num_list[-10:])
+        
+        # Trend direction
+        if sma_5 > sma_10:
+            trend = "BULLISH"
+        elif sma_5 < sma_10:
+            trend = "BEARISH"
+        else:
+            trend = "SIDEWAYS"
+        
+        # Trend strength
+        volatility = np.std(num_list)
+        if volatility < 2.5:
+            strength = "STRONG"
+        elif volatility < 3.5:
+            strength = "MEDIUM"
+        else:
+            strength = "WEAK"
+        
+        # Pattern recognition
+        recent_pattern = self.detect_patterns(num_list[-10:])
+        
+        return {
+            'trend': trend,
+            'strength': strength,
+            'volatility': round(volatility, 2),
+            'sma_5': round(sma_5, 2),
+            'sma_10': round(sma_10, 2),
+            'pattern': recent_pattern
+        }
+    
+    def detect_patterns(self, numbers):
+        """Detect common number patterns"""
+        if len(numbers) < 3:
+            return "NO_PATTERN"
+        
+        # Check for alternating pattern
+        if all(numbers[i] != numbers[i+1] for i in range(len(numbers)-1)):
+            return "ALTERNATING"
+        
+        # Check for trending pattern
+        diffs = [numbers[i+1] - numbers[i] for i in range(len(numbers)-1)]
+        if all(d > 0 for d in diffs[-3:]):
+            return "UPTREND"
+        elif all(d < 0 for d in diffs[-3:]):
+            return "DOWNTREND"
+        
+        return "RANDOM"
+    
+    def generate_prediction(self, current_data, history):
+        """Generate real-time prediction with multiple strategies"""
+        if len(history) < 10:
+            return random.randint(0, 9), "LOW"
+        
+        recent_numbers = [int(round_data["number"]) for round_data in list(history)[-15:]]
+        current_number = int(current_data["number"])
+        
+        strategies = []
+        weights = []
+        
+        # Strategy 1: Moving Average Reversion
+        ma_5 = np.mean(recent_numbers[-5:])
+        if current_number > ma_5:
+            strategies.append(random.randint(0, 4))  # Predict smaller
+        else:
+            strategies.append(random.randint(5, 9))  # Predict bigger
+        weights.append(1.2)
+        
+        # Strategy 2: Momentum
+        momentum = recent_numbers[-1] - recent_numbers[-3]
+        if momentum > 0:
+            strategies.append(min(9, current_number + 1))
+        else:
+            strategies.append(max(0, current_number - 1))
+        weights.append(1.0)
+        
+        # Strategy 3: Pattern-based
+        patterns = self.analyze_market_trends([str(n) for n in recent_numbers])
+        if patterns['trend'] == "BULLISH":
+            strategies.append(random.randint(5, 9))
+        elif patterns['trend'] == "BEARISH":
+            strategies.append(random.randint(0, 4))
+        else:
+            strategies.append(random.randint(0, 9))
+        weights.append(1.1)
+        
+        # Strategy 4: Anti-pattern (contrarian)
+        freq = Counter(recent_numbers)
+        least_common = freq.most_common()[-1][0]
+        strategies.append(least_common)
+        weights.append(0.9)
+        
+        # Weighted selection
+        predicted = random.choices(strategies, weights=weights)[0]
+        
+        # Confidence calculation
+        confidence = self.calculate_confidence(strategies, recent_numbers)
+        
+        return predicted, confidence
+    
+    def calculate_confidence(self, strategies, recent_numbers):
+        """Calculate prediction confidence"""
+        agreement = len(set(strategies))
+        volatility = np.std(recent_numbers)
+        
+        if agreement <= 2 and volatility < 3.0:
+            return "HIGH"
+        elif agreement <= 3 and volatility < 4.0:
+            return "MEDIUM"
+        else:
+            return "LOW"
+    
+    def get_trading_signal(self, predicted_number, confidence, market_trend):
+        """Generate trading signals based on prediction and market conditions"""
+        signal_type = "BIG" if predicted_number >= 5 else "SMALL"
+        
+        # Signal strength based on confidence and trend alignment
+        if signal_type == "BIG" and market_trend['trend'] == "BULLISH":
+            strength = "STRONG_BUY"
+        elif signal_type == "SMALL" and market_trend['trend'] == "BEARISH":
+            strength = "STRONG_SELL"
+        elif confidence == "HIGH":
+            strength = "BUY" if signal_type == "BIG" else "SELL"
+        else:
+            strength = "WEAK_BUY" if signal_type == "BIG" else "WEAK_SELL"
+        
+        return {
+            'type': signal_type,
+            'strength': strength,
+            'predicted_number': predicted_number,
+            'confidence': confidence
+        }
+    
+    def update_performance(self, actual_number, predicted_number):
+        """Update trading performance statistics"""
+        self.performance_stats['total_predictions'] += 1
+        
+        actual_signal = "BIG" if int(actual_number) >= 5 else "SMALL"
+        predicted_signal = "BIG" if predicted_number >= 5 else "SMALL"
+        
+        if actual_signal == predicted_signal:
+            self.performance_stats['correct_predictions'] += 1
+            self.performance_stats['current_streak'] += 1
+            self.performance_stats['best_streak'] = max(
+                self.performance_stats['best_streak'],
+                self.performance_stats['current_streak']
+            )
+            result = "✅ CORRECT"
+        else:
+            self.performance_stats['current_streak'] = 0
+            result = "❌ WRONG"
+        
+        self.performance_stats['accuracy'] = round(
+            (self.performance_stats['correct_predictions'] / self.performance_stats['total_predictions']) * 100, 2
+        )
+        
+        return result, actual_signal
+    
+    def display_real_time_dashboard(self, current_round, prediction, signal, performance_result, market_trend):
+        """Display real-time trading dashboard"""
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Clear screen (optional - for cleaner display)
+        print("\n" * 3)
+        
+        print("🎯" + "="*60 + "🎯")
+        print("              REAL-TIME WIN GO TRADING TERMINAL")
+        print("                     Professional Edition v3.0")
+        print("🎯" + "="*60 + "🎯")
+        
+        print(f"\n⏰ Last Update: {current_time}")
+        print("📊" + "="*60 + "📊")
+        
+        # Current Market Data
+        print(f"🔄 LIVE MARKET DATA:")
+        print(f"   ├─ Round: #{current_round['issueNumber']}")
+        print(f"   ├─ Result: {current_round['number']}")
+        print(f"   ├─ Time: {current_round['drawTime']}")
+        print(f"   └─ Status: 🟢 LIVE TRADING")
+        
+        print("─" * 60)
+        
+        # Market Analysis
+        print(f"📈 TECHNICAL ANALYSIS:")
+        print(f"   ├─ Trend: {market_trend['trend']} ({market_trend['strength']})")
+        print(f"   ├─ Volatility: {market_trend['volatility']}")
+        print(f"   ├─ SMA(5): {market_trend['sma_5']} | SMA(10): {market_trend['sma_10']}")
+        print(f"   └─ Pattern: {market_trend['pattern']}")
+        
+        print("─" * 60)
+        
+        # Trading Signals
+        signal_emoji = "🟢" if signal['strength'] in ["STRONG_BUY", "BUY"] else "🔴"
+        print(f"🎯 TRADING SIGNAL:")
+        print(f"   ├─ Signal: {signal_emoji} {signal['strength']}")
+        print(f"   ├─ Type: {signal['type']}")
+        print(f"   ├─ Predicted Number: {prediction['number']}")
+        print(f"   └─ Confidence: {prediction['confidence']}")
+        
+        print("─" * 60)
+        
+        # Performance Tracking
+        print(f"📊 PERFORMANCE ANALYTICS:")
+        print(f"   ├─ Last Prediction: {performance_result['result']}")
+        print(f"   ├─ Accuracy: {self.performance_stats['accuracy']}%")
+        print(f"   ├─ Current Streak: {self.performance_stats['current_streak']}")
+        print(f"   ├─ Best Streak: {self.performance_stats['best_streak']}")
+        print(f"   └─ Total Trades: {self.performance_stats['total_predictions']}")
+        
+        # Recommendation
+        print("─" * 60)
+        print(f"💡 TRADING RECOMMENDATION:")
+        if signal['confidence'] == "HIGH" and signal['strength'] in ["STRONG_BUY", "STRONG_SELL"]:
+            print(f"   🚀 STRONG SIGNAL - Consider increasing position")
+        elif signal['confidence'] == "MEDIUM":
+            print(f"   ⚡ MODERATE SIGNAL - Standard trading position")
+        else:
+            print(f"   ⚠️  WEAK SIGNAL - Consider reducing position or waiting")
+        
+        print("📊" + "="*60 + "📊")
+        print("🔄 Next update in 5 seconds...")
+    
+    def run_trading_bot(self):
+        """Main trading bot loop"""
+        print("🚀 Initializing Real-Time Trading System...")
+        time.sleep(2)
+        
+        # Initial data load
+        rounds = self.get_market_data()
+        if rounds:
+            self.history_data.extend(rounds[:50])
+            self.last_round = rounds[0]
+            print("✅ Market data loaded successfully!")
+        else:
+            print("❌ Failed to connect to market data")
+            return
+        
+        print("\n🎯 Trading Bot Activated - Starting Real-Time Signals...\n")
+        time.sleep(2)
+        
+        consecutive_errors = 0
+        
+        while self.is_running:
+            try:
+                # Fetch latest market data
+                rounds = self.get_market_data()
+                if not rounds:
+                    consecutive_errors += 1
+                    if consecutive_errors >= 3:
+                        print("🔴 Critical error - stopping bot")
+                        break
+                    time.sleep(5)
+                    continue
+                
+                consecutive_errors = 0
+                current_round = rounds[0]
+                
+                # Check if new round is available
+                if current_round['issueNumber'] != self.last_round['issueNumber']:
+                    # New round detected - process prediction result
+                    if hasattr(self, 'last_prediction'):
+                        # Compare prediction with actual result
+                        actual_number = self.last_round['number']
+                        performance_result, actual_signal = self.update_performance(
+                            actual_number, self.last_prediction['number']
+                        )
+                        
+                        # Store performance result for display
+                        self.last_performance = {
+                            'result': performance_result,
+                            'actual_signal': actual_signal,
+                            'actual_number': actual_number
+                        }
+                
+                # Update history
+                if current_round not in self.history_data:
+                    self.history_data.appendleft(current_round)
+                
+                # Generate new prediction for next round
+                market_trend = self.analyze_market_trends(
+                    [r["number"] for r in list(self.history_data)[-20:]]
+                )
+                
+                predicted_number, confidence = self.generate_prediction(
+                    current_round, self.history_data
+                )
+                
+                # Generate trading signal
+                trading_signal = self.get_trading_signal(
+                    predicted_number, confidence, market_trend
+                )
+                
+                # Store prediction for next comparison
+                self.last_prediction = {
+                    'number': predicted_number,
+                    'signal': trading_signal['type'],
+                    'confidence': confidence
+                }
+                
+                # Prepare performance display
+                performance_display = getattr(self, 'last_performance', {
+                    'result': '⏳ WAITING',
+                    'actual_signal': 'N/A',
+                    'actual_number': 'N/A'
+                })
+                
+                # Display real-time dashboard
+                self.display_real_time_dashboard(
+                    current_round,
+                    self.last_prediction,
+                    trading_signal,
+                    performance_display,
+                    market_trend
+                )
+                
+                self.last_round = current_round
+                time.sleep(5)  # 5-second intervals for real-time updates
+                
+            except KeyboardInterrupt:
+                print("\n\n🛑 Trading Bot stopped by user")
+                self.is_running = False
+                break
+            except Exception as e:
+                print(f"⚠️ System error: {e}")
+                time.sleep(5)
+
+def main():
+    trading_bot = RealTimeTradingSystem()
+    
+    try:
+        trading_bot.run_trading_bot()
+    except Exception as e:
+        print(f"🔥 Critical error: {e}")
+    finally:
+        print("\n📊 Final Performance Summary:")
+        print(f"   Accuracy: {trading_bot.performance_stats['accuracy']}%")
+        print(f"   Total Predictions: {trading_bot.performance_stats['total_predictions']}")
+        print(f"   Correct Predictions: {trading_bot.performance_stats['correct_predictions']}")
+        print("🎯 Thank you for using Real-Time Trading System!")
+
+if __name__ == "__main__":
+    main()
 title: Set up your environment
 description: Learn how to set up your development environment to start building with Expo.
 hideTOC: true
